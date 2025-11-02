@@ -51,8 +51,11 @@ const { rows: todos, loading, error, refresh } = useSQLiteQuery(
 
 const newTitle = ref("");
 
+// Get the client promise during setup (inject() must be called at setup time)
+const dbPromise = useSQLiteClientAsync();
+
 async function addTodo() {
-  const db = await useSQLiteClientAsync();
+  const db = await dbPromise;
   await db.exec(
     "INSERT INTO todos (id, title) VALUES (?, ?)",
     [crypto.randomUUID(), newTitle.value]
@@ -106,9 +109,25 @@ Composable for reactive queries.
 
 ### `useSQLiteClientAsync()`
 
-Get the SQLite client instance.
+Get the SQLite client instance. **Must be called during component setup**, not inside async functions.
 
 **Returns:** `Promise<SQLiteClient>`
+
+**Usage:**
+```typescript
+// ✅ Correct: Call during setup
+const dbPromise = useSQLiteClientAsync();
+
+async function doSomething() {
+  const db = await dbPromise;
+  // use db...
+}
+
+// ❌ Wrong: Don't call inside async functions
+async function doSomething() {
+  const db = await useSQLiteClientAsync(); // Error: inject() only works in setup
+}
+```
 
 ## Vite Configuration
 

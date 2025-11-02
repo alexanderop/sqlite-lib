@@ -10,8 +10,11 @@ const { rows: todos, loading, error, refresh } = useSQLiteQuery(
 
 const newTitle = ref("");
 
+// Get the client promise during setup
+const dbPromise = useSQLiteClientAsync();
+
 async function addTodo() {
-  const db = await useSQLiteClientAsync();
+  const db = await dbPromise;
   await db.exec(
     "INSERT INTO todos (id, title) VALUES (?, ?)",
     [crypto.randomUUID(), newTitle.value || "Untitled"]
