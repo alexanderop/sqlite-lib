@@ -1,0 +1,113 @@
+---
+title: SQLite Web
+description: Type-safe browser SQLite with WASM, OPFS, and reactive Vue integration
+template: splash
+hero:
+  tagline: A modern, type-safe SQLite library for the browser with WASM, OPFS persistence, and seamless Vue 3 integration
+  image:
+    file: ../../assets/houston.webp
+  actions:
+    - text: Get Started
+      link: /getting-started/installation/
+      icon: right-arrow
+      variant: primary
+    - text: View on GitHub
+      link: https://github.com/yourusername/sqlite-web
+      icon: external
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+## Features
+
+<CardGrid stagger>
+  <Card title="Type-Safe Query Builder" icon="pencil">
+    Full TypeScript support with compile-time type checking for tables, columns, and values. Autocomplete everywhere.
+  </Card>
+  <Card title="Zod Schema Validation" icon="approve-check">
+    Define your database schema with Zod and get automatic runtime validation on all mutations.
+  </Card>
+  <Card title="OPFS Persistence" icon="document">
+    Data persists across browser sessions using Origin Private File System (OPFS) with SQLite WASM.
+  </Card>
+  <Card title="Reactive Vue Integration" icon="random">
+    Built-in Vue composables with automatic query updates when data changes.
+  </Card>
+  <Card title="Query Builder API" icon="list-format">
+    Chainable, fluent API inspired by Nuxt Content's queryCollection pattern.
+  </Card>
+  <Card title="Migration System" icon="rocket">
+    Version-based migrations run automatically on database initialization.
+  </Card>
+</CardGrid>
+
+## Quick Example
+
+```typescript
+import { createSQLiteClient } from "@alexop/sqlite-core";
+import { z } from "zod";
+
+// Define schema with Zod
+const schema = {
+  todos: z.object({
+    id: z.string(),
+    title: z.string(),
+    completed: z.boolean().default(false),
+    createdAt: z.string().default(() => new Date().toISOString()),
+  })
+} as const;
+
+// Create client
+const db = await createSQLiteClient({
+  schema,
+  filename: "file:app.sqlite3?vfs=opfs",
+  migrations: [{
+    version: 1,
+    sql: `CREATE TABLE todos (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      completed INTEGER DEFAULT 0,
+      createdAt TEXT DEFAULT CURRENT_TIMESTAMP
+    )`
+  }]
+});
+
+// Query with full type safety
+const todos = await db.query("todos")
+  .where("completed", "=", false)
+  .orderBy("createdAt", "DESC")
+  .all();
+
+// Insert with validation
+await db.insert("todos").values({
+  id: crypto.randomUUID(),
+  title: "Build something awesome",
+});
+```
+
+## Architecture
+
+SQLite Web is a monorepo with two main packages:
+
+- **`@alexop/sqlite-core`** - Framework-agnostic SQLite client using sqlite-wasm
+- **`@alexop/sqlite-vue`** - Vue 3 plugin and composables for reactive queries
+
+Both packages are built with TypeScript and provide full type safety throughout your application.
+
+## Browser Requirements
+
+SQLite WASM requires specific headers for `SharedArrayBuffer` support:
+
+```typescript
+// vite.config.ts
+export default {
+  server: {
+    headers: {
+      "Cross-Origin-Opener-Policy": "same-origin",
+      "Cross-Origin-Embedder-Policy": "require-corp"
+    }
+  }
+}
+```
+
+See the [Browser Setup](/guides/browser-setup/) guide for complete configuration details.

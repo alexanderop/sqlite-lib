@@ -1,0 +1,416 @@
+---
+title: Mutations
+description: Insert, update, and delete data with automatic validation
+---
+
+SQLite Web provides type-safe mutation methods with automatic Zod validation for all data changes.
+
+## Insert
+
+Add new rows to your database with `.insert()`:
+
+### Basic Insert
+
+```typescript
+await db.insert("todos").values({
+  id: crypto.randomUUID(),
+  title: "Buy groceries",
+  completed: false,
+  createdAt: new Date().toISOString()
+});
+```
+
+### Using Defaults
+
+Fields with `.default()` in the schema can be omitted:
+
+```typescript
+const schema = {
+  todos: z.object({
+    id: z.string(),
+    title: z.string(),
+    completed: z.boolean().default(false),
+    createdAt: z.string().default(() => new Date().toISOString()),
+  })
+} as const;
+
+// completed and createdAt use defaults
+await db.insert("todos").values({
+  id: crypto.randomUUID(),
+  title: "Buy groceries"
+});
+```
+
+### Validation
+
+All inserts are validated against the Zod schema:
+
+```typescript
+const schema = {
+  users: z.object({
+    id: z.string().uuid(),
+    email: z.string().email(),
+    age: z.number().min(0).max(150),
+  })
+} as const;
+
+// ✅ Valid
+await db.insert("users").values({
+  id: crypto.randomUUID(),
+  email: "alice@example.com",
+  age: 30
+});
+
+// ❌ Throws ZodError - invalid email
+await db.insert("users").values({
+  id: "123",
+  email: "not-an-email",
+  age: 30
+});
+```
+
+### Type Safety
+
+TypeScript enforces correct field types:
+
+```typescript
+// ✅ Valid
+await db.insert("todos").values({
+  id: "123",
+  title: "Buy milk",
+  completed: false
+});
+
+// ❌ TypeScript error - missing required field 'title'
+await db.insert("todos").values({
+  id: "123",
+  completed: false
+});
+
+// ❌ TypeScript error - wrong type for 'completed'
+await db.insert("todos").values({
+  id: "123",
+  title: "Buy milk",
+  completed: "yes"  // Should be boolean
+});
+```
+
+## Update
+
+Modify existing rows with `.update()`:
+
+### Basic Update
+
+```typescript
+await db.update("todos")
+  .where("id", "=", "123")
+  .set({ completed: true })
+  .execute();
+```
+
+### Multiple Fields
+
+Update multiple fields at once:
+
+```typescript
+await db.update("todos")
+  .where("id", "=", "123")
+  .set({
+    title: "Updated title",
+    completed: true,
+    updatedAt: new Date().toISOString()
+  })
+  .execute();
+```
+
+### Multiple Conditions
+
+Use multiple `.where()` calls for complex conditions:
+
+```typescript
+await db.update("todos")
+  .where("completed", "=", false)
+  .where("priority", "=", "low")
+  .set({ priority: "medium" })
+  .execute();
+```
+
+### Validation
+
+Updates are also validated:
+
+```typescript
+// ✅ Valid
+await db.update("users")
+  .where("id", "=", "123")
+  .set({ age: 31 })
+  .execute();
+
+// ❌ Throws ZodError - age out of range
+await db.update("users")
+  .where("id", "=", "123")
+  .set({ age: 200 })
+  .execute();
+```
+
+### Type Safety
+
+TypeScript ensures you only update with valid fields and types:
+
+```typescript
+// ✅ Valid - 'completed' exists and is boolean
+await db.update("todos")
+  .where("id", "=", "123")
+  .set({ completed: true })
+  .execute();
+
+// ❌ TypeScript error - 'invalid' field doesn't exist
+await db.update("todos")
+  .where("id", "=", "123")
+  .set({ invalid: "value" })
+  .execute();
+
+// ❌ TypeScript error - wrong type
+await db.update("todos")
+  .where("id", "=", "123")
+  .set({ completed: "yes" })  // Should be boolean
+  .execute();
+```
+
+## Delete
+
+Remove rows with `.delete()`:
+
+### Basic Delete
+
+```typescript
+await db.delete("todos")
+  .where("id", "=", "123")
+  .execute();
+```
+
+### Conditional Delete
+
+Delete based on conditions:
+
+```typescript
+// Delete all completed todos
+await db.delete("todos")
+  .where("completed", "=", true)
+  .execute();
+
+// Delete old todos
+await db.delete("todos")
+  .where("createdAt", "<", "2024-01-01")
+  .execute();
+```
+
+### Multiple Conditions
+
+```typescript
+await db.delete("todos")
+  .where("completed", "=", true)
+  .where("createdAt", "<", "2024-01-01")
+  .execute();
+```
+
+:::caution
+Be careful with `.delete()` without a `.where()` clause - it will delete ALL rows!
+
+```typescript
+// This deletes EVERYTHING
+await db.delete("todos").execute();
+```
+:::
+
+## Transactions
+
+SQLite Web doesn't currently have a high-level transaction API, but you can use raw SQL:
+
+```typescript
+await db.exec("BEGIN TRANSACTION");
+
+try {
+  await db.insert("users").values({ id: "1", name: "Alice" });
+  await db.insert("profiles").values({ userId: "1", bio: "Developer" });
+
+  await db.exec("COMMIT");
+} catch (error) {
+  await db.exec("ROLLBACK");
+  throw error;
+}
+```
+
+## Batch Operations
+
+For bulk inserts, consider using raw SQL with prepared statements:
+
+```typescript
+const todos = [
+  { id: "1", title: "Task 1" },
+  { id: "2", title: "Task 2" },
+  { id: "3", title: "Task 3" }
+];
+
+// Multiple individual inserts (slower)
+for (const todo of todos) {
+  await db.insert("todos").values(todo);
+}
+
+// Single batch insert (faster)
+const placeholders = todos.map(() => "(?, ?)").join(", ");
+const values = todos.flatMap(t => [t.id, t.title]);
+
+await db.raw(
+  `INSERT INTO todos (id, title) VALUES ${placeholders}`,
+  values
+);
+```
+
+## Table Change Notifications
+
+After mutations, notify subscribers to trigger reactive updates:
+
+```typescript
+// In a Vue component or reactive context
+await db.insert("todos").values({ ... });
+db.notifyTable("todos");  // Triggers re-queries in useSQLiteQuery
+```
+
+See [Reactive Queries](/vue/reactive-queries/) for more details on the pub/sub system.
+
+## Upsert
+
+SQLite supports `INSERT OR REPLACE` for upsert operations:
+
+```typescript
+await db.raw(
+  `INSERT OR REPLACE INTO todos (id, title, completed)
+   VALUES (?, ?, ?)`,
+  ["123", "Updated title", true]
+);
+```
+
+Or use the conflict clause:
+
+```typescript
+await db.raw(
+  `INSERT INTO todos (id, title, completed)
+   VALUES (?, ?, ?)
+   ON CONFLICT(id) DO UPDATE SET
+     title = excluded.title,
+     completed = excluded.completed`,
+  ["123", "Updated title", true]
+);
+```
+
+## Returning Values
+
+SQLite 3.35+ supports `RETURNING` to get inserted/updated data:
+
+```typescript
+const result = await db.raw<{ id: string }>(
+  `INSERT INTO todos (id, title) VALUES (?, ?)
+   RETURNING id`,
+  [crypto.randomUUID(), "New todo"]
+);
+
+console.log(result[0].id);
+```
+
+## Best Practices
+
+1. **Always validate** - Use Zod schemas for all mutations
+2. **Use typed methods** - Prefer `.insert()`, `.update()`, `.delete()` over raw SQL
+3. **Notify subscribers** - Call `.notifyTable()` after mutations in reactive contexts
+4. **Be careful with delete** - Always use `.where()` unless you really want to delete everything
+5. **Use transactions** - Wrap related mutations in transactions for consistency
+6. **Batch when possible** - Use raw SQL with placeholders for bulk operations
+
+## Common Patterns
+
+### Soft Delete
+
+Implement soft deletes with an `deletedAt` field:
+
+```typescript
+const schema = {
+  todos: z.object({
+    id: z.string(),
+    title: z.string(),
+    deletedAt: z.string().nullable().default(null),
+  })
+} as const;
+
+// Soft delete
+await db.update("todos")
+  .where("id", "=", "123")
+  .set({ deletedAt: new Date().toISOString() })
+  .execute();
+
+// Query only non-deleted
+const activeTodos = await db.query("todos")
+  .where("deletedAt", "=", null)
+  .all();
+```
+
+### Timestamps
+
+Track creation and modification times:
+
+```typescript
+const schema = {
+  posts: z.object({
+    id: z.string(),
+    title: z.string(),
+    createdAt: z.string().default(() => new Date().toISOString()),
+    updatedAt: z.string().default(() => new Date().toISOString()),
+  })
+} as const;
+
+// Create
+await db.insert("posts").values({
+  id: crypto.randomUUID(),
+  title: "My post"
+  // createdAt and updatedAt auto-set
+});
+
+// Update
+await db.update("posts")
+  .where("id", "=", "123")
+  .set({
+    title: "Updated title",
+    updatedAt: new Date().toISOString()
+  })
+  .execute();
+```
+
+### Optimistic Updates
+
+Update locally, then sync to database:
+
+```typescript
+// 1. Update local state immediately
+todos.value = todos.value.map(t =>
+  t.id === id ? { ...t, completed: true } : t
+);
+
+// 2. Update database
+try {
+  await db.update("todos")
+    .where("id", "=", id)
+    .set({ completed: true })
+    .execute();
+
+  db.notifyTable("todos");
+} catch (error) {
+  // 3. Revert on error
+  todos.value = await db.query("todos").all();
+}
+```
+
+## Next Steps
+
+- [Migrations](/core/migrations/) - Learn how to manage schema changes
+- [Reactive Queries](/vue/reactive-queries/) - Automatic UI updates with Vue
+- [API Reference](/api/mutations/) - Complete mutation API reference
