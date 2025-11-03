@@ -1,0 +1,39 @@
+{
+  "$schema": "https://oxc.rs/schemas/oxlintrc.json",
+  "env": {
+    "browser": true,
+    "es2022": true,
+    "node": true
+  },
+  "globals": {
+    "SharedArrayBuffer": "readonly",
+    "Atomics": "readonly"
+  },
+  "plugins": ["typescript", "jsx-a11y", "vitest", "unicorn"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn",
+    "pedantic": "off",
+    "perf": "warn",
+    "style": "off",
+    "restriction": "off",
+    "nursery": "off"
+  },
+  "rules": {
+    "typescript/no-explicit-any": "warn",
+    "typescript/no-unused-vars": "warn",
+    "typescript/explicit-function-return-type": "off",
+    "typescript/no-non-null-assertion": "warn",
+    "unicorn/filename-case": "off",
+    "unicorn/prevent-abbreviations": "off",
+    "no-console": "off",
+    "no-debugger": "warn"
+  },
+  "ignorePatterns": ["**/dist/**", "**/node_modules/**", "**/.astro/**", "**/coverage/**"],
+  "settings": {
+    "jsx": {
+      "pragma": "h",
+      "pragmaFrag": "Fragment"
+    }
+  }
+}

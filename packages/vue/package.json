@@ -45,7 +45,7 @@
     "vue": "^3.4.0"
   },
   "dependencies": {
-    "@alexop/sqlite-core": "^0.1.0"
+    "@alexop/sqlite-core": "workspace:*"
   },
   "devDependencies": {
     "vue": "^3.4.0",
@@ -55,6 +55,9 @@
     "build": "tsup src/index.ts --format esm --dts",
     "test": "vitest run",
     "test:type": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "lint": "oxlint .",
+    "lint:type-aware": "oxlint --type-aware .",
+    "lint:fix": "oxlint --fix ."
   }
 }

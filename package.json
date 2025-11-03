@@ -15,13 +15,18 @@
     "test": "vitest",
     "test:run": "vitest run",
     "test:ui": "vitest --ui",
-    "test:vue-app": "pnpm --filter vue-app test"
+    "test:vue-app": "pnpm --filter vue-app test",
+    "lint": "oxlint .",
+    "lint:type-aware": "oxlint --type-aware .",
+    "lint:fix": "oxlint --fix ."
   },
   "packageManager": "pnpm@10.18.3",
   "devDependencies": {
     "@vitest/browser": "^4.0.6",
     "@vitest/browser-playwright": "^4.0.6",
     "@vitest/ui": "^4.0.6",
+    "oxlint": "^1.25.0",
+    "oxlint-tsgolint": "^0.4.0",
     "playwright": "^1.56.1",
     "tsup": "^8.5.0",
     "typescript": "^5.9.3",
