@@ -3,8 +3,35 @@ import type { SQLOperator } from "./types";
 
 /**
  * Insert builder for INSERT operations with Zod validation
+ *
+ * Handles both single and batch inserts with automatic runtime validation
+ * using the table's Zod schema. All data is validated before insertion.
+ *
+ * @template TRow - Row type from the table schema
+ *
+ * @example
+ * ```typescript
+ * // Single insert
+ * const id = await db.insert('users').values({
+ *   name: 'Alice',
+ *   email: 'alice@example.com'
+ * });
+ *
+ * // Batch insert
+ * await db.insert('users').values([
+ *   { name: 'Bob', email: 'bob@example.com' },
+ *   { name: 'Charlie', email: 'charlie@example.com' }
+ * ]);
+ * ```
  */
 export class InsertBuilder<TRow> {
+  /**
+   * Create a new InsertBuilder instance
+   * @param executeQuery - Function to execute SQL queries
+   * @param tableName - Name of the table to insert into
+   * @param schema - Zod schema for runtime validation
+   * @internal
+   */
   constructor(
     private executeQuery: <T = unknown>(sql: string, params: unknown[]) => Promise<T[]>,
     private tableName: string,
@@ -12,8 +39,38 @@ export class InsertBuilder<TRow> {
   ) {}
 
   /**
-   * Insert a row or multiple rows with validation
-   * Returns the last inserted row ID
+   * Insert one or more rows with Zod validation
+   *
+   * Validates all data against the table schema before insertion.
+   * Automatically detects single vs batch insert based on input type.
+   * All fields are optional (uses schema.partial() for validation).
+   *
+   * @param data - Single row object or array of row objects to insert
+   * @returns Promise resolving to the last inserted row ID
+   * @throws {z.ZodError} If validation fails
+   *
+   * @example
+   * ```typescript
+   * // Single insert
+   * const userId = await db.insert('users').values({
+   *   name: 'Alice',
+   *   email: 'alice@example.com',
+   *   age: 25
+   * });
+   *
+   * // Batch insert (more efficient than multiple single inserts)
+   * const lastId = await db.insert('users').values([
+   *   { name: 'Bob', email: 'bob@example.com' },
+   *   { name: 'Charlie', email: 'charlie@example.com' },
+   *   { name: 'Diana', email: 'diana@example.com' }
+   * ]);
+   *
+   * // Partial data (fields can be omitted if schema allows)
+   * await db.insert('posts').values({
+   *   title: 'My Post',
+   *   // other fields will use DEFAULT values
+   * });
+   * ```
    */
   async values(data: Partial<TRow> | Partial<TRow>[]): Promise<number> {
     if (Array.isArray(data)) {
@@ -23,7 +80,10 @@ export class InsertBuilder<TRow> {
   }
 
   /**
-   * Insert a single row
+   * Insert a single row into the table
+   * @param data - Row data to insert
+   * @returns Last inserted row ID
+   * @internal
    */
   private async singleInsert(data: Partial<TRow>): Promise<number> {
     const validated = this.schema.partial().parse(data);
@@ -38,7 +98,10 @@ export class InsertBuilder<TRow> {
   }
 
   /**
-   * Insert multiple rows in a single SQL statement
+   * Insert multiple rows in a single SQL statement (batch operation)
+   * @param data - Array of row objects to insert
+   * @returns Last inserted row ID
+   * @internal
    */
   private async batchInsert(data: Partial<TRow>[]): Promise<number> {
     if (data.length === 0) {
@@ -62,7 +125,9 @@ export class InsertBuilder<TRow> {
   }
 
   /**
-   * Get the last inserted row ID
+   * Get the last inserted row ID using SQLite's last_insert_rowid()
+   * @returns Last inserted row ID
+   * @internal
    */
   private async getLastInsertId(): Promise<number> {
     const result = await this.executeQuery(
@@ -74,13 +139,40 @@ export class InsertBuilder<TRow> {
 }
 
 /**
- * Update builder for UPDATE operations with WHERE conditions
+ * Update builder for UPDATE operations with WHERE conditions and Zod validation
+ *
+ * Provides a fluent API for building UPDATE queries with type-safe field names
+ * and runtime validation. Supports multiple WHERE conditions combined with AND.
+ *
+ * @template TRow - Row type from the table schema
+ *
+ * @example
+ * ```typescript
+ * // Update a single user
+ * await db.update('users')
+ *   .where('id', '=', 1)
+ *   .set({ name: 'Updated Name', age: 26 })
+ *   .execute();
+ *
+ * // Update multiple rows
+ * await db.update('users')
+ *   .where('status', '=', 'pending')
+ *   .set({ status: 'active' })
+ *   .execute();
+ * ```
  */
 export class UpdateBuilder<TRow> {
   private whereClauses: string[] = [];
   private whereParams: unknown[] = [];
   private setData: Partial<TRow> | undefined;
 
+  /**
+   * Create a new UpdateBuilder instance
+   * @param executeQuery - Function to execute SQL queries
+   * @param tableName - Name of the table to update
+   * @param schema - Zod schema for runtime validation
+   * @internal
+   */
   constructor(
     private executeQuery: <T = unknown>(sql: string, params: unknown[]) => Promise<T[]>,
     private tableName: string,
@@ -88,7 +180,35 @@ export class UpdateBuilder<TRow> {
   ) {}
 
   /**
-   * Add WHERE condition
+   * Add a WHERE condition to filter which rows to update
+   *
+   * Multiple WHERE calls are combined with AND. Supports standard comparison
+   * operators and IN/NOT IN for array values.
+   *
+   * @template K - Field name from the table schema
+   * @param field - Column name to filter on (type-safe)
+   * @param operator - SQL comparison operator
+   * @param value - Value to compare against (or array for IN/NOT IN)
+   * @returns This UpdateBuilder instance for chaining
+   *
+   * @example
+   * ```typescript
+   * // Single condition
+   * db.update('users')
+   *   .where('id', '=', 1)
+   *   .set({ name: 'Alice' })
+   *
+   * // Multiple conditions
+   * db.update('users')
+   *   .where('status', '=', 'active')
+   *   .where('age', '>', 18)
+   *   .set({ verified: true })
+   *
+   * // IN operator
+   * db.update('users')
+   *   .where('id', 'IN', [1, 2, 3])
+   *   .set({ group: 'premium' })
+   * ```
    */
   where<K extends keyof TRow>(
     field: K,
@@ -111,7 +231,27 @@ export class UpdateBuilder<TRow> {
   }
 
   /**
-   * Set the data to update (with partial validation)
+   * Specify the field values to update with Zod validation
+   *
+   * Validates data against the table schema before updating.
+   * All fields are optional (uses schema.partial() for validation).
+   *
+   * @param data - Partial object with fields to update
+   * @returns This UpdateBuilder instance for chaining
+   * @throws {z.ZodError} If validation fails
+   *
+   * @example
+   * ```typescript
+   * // Update single field
+   * db.update('users')
+   *   .where('id', '=', 1)
+   *   .set({ name: 'New Name' })
+   *
+   * // Update multiple fields
+   * db.update('users')
+   *   .where('id', '=', 1)
+   *   .set({ name: 'Alice', age: 26, status: 'active' })
+   * ```
    */
   set(data: Partial<TRow>): this {
     this.setData = data;
@@ -119,8 +259,33 @@ export class UpdateBuilder<TRow> {
   }
 
   /**
-   * Execute the update
-   * Returns the number of affected rows
+   * Execute the UPDATE statement
+   *
+   * Runs the UPDATE query with all specified WHERE conditions and SET values.
+   * Returns the number of rows that were actually modified.
+   *
+   * @returns Promise resolving to number of affected rows
+   * @throws {Error} If set() was not called before execute()
+   * @throws {z.ZodError} If validation fails
+   *
+   * @example
+   * ```typescript
+   * // Execute and get affected count
+   * const count = await db.update('users')
+   *   .where('status', '=', 'pending')
+   *   .set({ status: 'active' })
+   *   .execute();
+   * console.log(`Updated ${count} users`);
+   *
+   * // Check if update succeeded
+   * const updated = await db.update('users')
+   *   .where('id', '=', 1)
+   *   .set({ lastLogin: new Date().toISOString() })
+   *   .execute();
+   * if (updated === 0) {
+   *   console.log('User not found');
+   * }
+   * ```
    */
   async execute(): Promise<number> {
     if (!this.setData) {
@@ -151,18 +316,70 @@ export class UpdateBuilder<TRow> {
 
 /**
  * Delete builder for DELETE operations with WHERE conditions
+ *
+ * Provides a fluent API for building DELETE queries with type-safe field names.
+ * Supports multiple WHERE conditions combined with AND.
+ *
+ * @template TRow - Row type from the table schema
+ *
+ * @example
+ * ```typescript
+ * // Delete a single row
+ * await db.delete('users')
+ *   .where('id', '=', 1)
+ *   .execute();
+ *
+ * // Delete multiple rows
+ * await db.delete('posts')
+ *   .where('status', '=', 'draft')
+ *   .where('createdAt', '<', oldDate)
+ *   .execute();
+ * ```
  */
 export class DeleteBuilder<TRow> {
   private whereClauses: string[] = [];
   private whereParams: unknown[] = [];
 
+  /**
+   * Create a new DeleteBuilder instance
+   * @param executeQuery - Function to execute SQL queries
+   * @param tableName - Name of the table to delete from
+   * @internal
+   */
   constructor(
     private executeQuery: <T = unknown>(sql: string, params: unknown[]) => Promise<T[]>,
     private tableName: string
   ) {}
 
   /**
-   * Add WHERE condition
+   * Add a WHERE condition to filter which rows to delete
+   *
+   * Multiple WHERE calls are combined with AND. Supports standard comparison
+   * operators and IN/NOT IN for array values.
+   *
+   * WARNING: Calling execute() without any WHERE conditions will delete ALL rows.
+   *
+   * @template K - Field name from the table schema
+   * @param field - Column name to filter on (type-safe)
+   * @param operator - SQL comparison operator
+   * @param value - Value to compare against (or array for IN/NOT IN)
+   * @returns This DeleteBuilder instance for chaining
+   *
+   * @example
+   * ```typescript
+   * // Delete single row by ID
+   * db.delete('users')
+   *   .where('id', '=', 1)
+   *
+   * // Delete multiple rows
+   * db.delete('users')
+   *   .where('status', '=', 'inactive')
+   *   .where('lastLogin', '<', cutoffDate)
+   *
+   * // Delete with IN operator
+   * db.delete('users')
+   *   .where('id', 'IN', [1, 2, 3])
+   * ```
    */
   where<K extends keyof TRow>(
     field: K,
@@ -185,8 +402,36 @@ export class DeleteBuilder<TRow> {
   }
 
   /**
-   * Execute the delete
-   * Returns the number of affected rows
+   * Execute the DELETE statement
+   *
+   * Runs the DELETE query with all specified WHERE conditions.
+   * Returns the number of rows that were actually deleted.
+   *
+   * WARNING: If no WHERE conditions were added, this will delete ALL rows from the table.
+   *
+   * @returns Promise resolving to number of deleted rows
+   *
+   * @example
+   * ```typescript
+   * // Delete and get count
+   * const count = await db.delete('users')
+   *   .where('status', '=', 'deleted')
+   *   .execute();
+   * console.log(`Deleted ${count} users`);
+   *
+   * // Check if delete succeeded
+   * const deleted = await db.delete('posts')
+   *   .where('id', '=', 1)
+   *   .execute();
+   * if (deleted === 0) {
+   *   console.log('Post not found');
+   * }
+   *
+   * // Cleanup old records
+   * const removed = await db.delete('logs')
+   *   .where('createdAt', '<', thirtyDaysAgo)
+   *   .execute();
+   * ```
    */
   async execute(): Promise<number> {
     let sql = `DELETE FROM ${this.tableName}`;
