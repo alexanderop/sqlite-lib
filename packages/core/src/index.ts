@@ -4,6 +4,7 @@ import { QueryBuilder } from "./query-builder";
 import { DeleteBuilder, InsertBuilder, UpdateBuilder } from "./mutation-builders";
 import { Transaction } from "./transaction";
 import type { SchemaRegistry, TableName, TableRow } from "./types";
+import { parseSQLiteError } from "./errors";
 
 /**
  * Represents a database migration with a version number and SQL statement
@@ -510,15 +511,27 @@ export async function createSQLiteClient<TSchema extends SchemaRegistry>(
       throw new Error("Database not initialized");
     }
 
-    const result = await promiser("exec", {
-      bind: params, dbId, returnValue: "resultRows", rowMode: "object", sql,
-    });
+    try {
+      const result = await promiser("exec", {
+        bind: params, dbId, returnValue: "resultRows", rowMode: "object", sql,
+      });
 
-    if (result.type === "error") {
-      throw new Error(result.result?.message || "Query failed");
+      // Check for errors in the result (in case promiser resolves with error)
+      if (result.type === "error" || (result.result as any)?.errorClass) {
+        const message = result.result?.message || "Query failed";
+        throw parseSQLiteError(message, sql);
+      }
+
+      return result;
+    } catch (error: any) {
+      // Promiser rejected - check if it's an error object from SQLite
+      if (error?.type === "error" || error?.result?.errorClass) {
+        const message = error.result?.message || "Query failed";
+        throw parseSQLiteError(message, sql);
+      }
+      // Re-throw if it's a different kind of error
+      throw error;
     }
-
-    return result;
   }
 
   /**
@@ -535,6 +548,11 @@ export async function createSQLiteClient<TSchema extends SchemaRegistry>(
     params: unknown[] = []
   ): Promise<T[]> {
     const res = await exec(sql, params);
+    // exec() should have already thrown on error, but double-check
+    if (res.type === "error") {
+      const message = res.result?.message || "Query failed";
+      throw parseSQLiteError(message, sql);
+    }
     const rows = res.result?.resultRows ?? [];
     return rows as T[];
   }
@@ -614,6 +632,7 @@ export async function createSQLiteClient<TSchema extends SchemaRegistry>(
 // Re-export types and utilities
 export * from "./types";
 export * from "./zod-utils";
+export * from "./errors";
 export { QueryBuilder } from "./query-builder";
 export { InsertBuilder, UpdateBuilder, DeleteBuilder } from "./mutation-builders";
 export { Transaction } from "./transaction";

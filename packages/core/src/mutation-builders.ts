@@ -1,5 +1,6 @@
-import type { z } from "zod";
+import { type z, ZodError } from "zod";
 import type { SQLOperator } from "./types";
+import { ValidationError } from "./errors";
 
 /**
  * Insert builder for INSERT operations with Zod validation
@@ -86,7 +87,22 @@ export class InsertBuilder<TRow> {
    * @internal
    */
   private async singleInsert(data: Partial<TRow>): Promise<number> {
-    const validated = this.schema.partial().parse(data);
+    let validated: Partial<TRow>;
+    try {
+      validated = this.schema.partial().parse(data) as Partial<TRow>;
+    } catch (error) {
+      if (error instanceof ZodError) {
+        const firstIssue = error.issues[0];
+        const field = firstIssue?.path[0]?.toString() || "unknown";
+        throw new ValidationError(
+          `Validation failed for field '${field}': ${firstIssue?.message || "Invalid data"}`,
+          field,
+          error.issues
+        );
+      }
+      throw error;
+    }
+
     const keys = Object.keys(validated);
     const values = Object.values(validated);
     const placeholders = keys.map(() => "?").join(", ");
@@ -109,7 +125,21 @@ export class InsertBuilder<TRow> {
     }
 
     // Validate all rows before executing
-    const validatedRows = data.map((row) => this.schema.partial().parse(row));
+    let validatedRows: Partial<TRow>[];
+    try {
+      validatedRows = data.map((row) => this.schema.partial().parse(row) as Partial<TRow>);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        const firstIssue = error.issues[0];
+        const field = firstIssue?.path[0]?.toString() || "unknown";
+        throw new ValidationError(
+          `Validation failed for field '${field}': ${firstIssue?.message || "Invalid data"}`,
+          field,
+          error.issues
+        );
+      }
+      throw error;
+    }
 
     // Build multi-row INSERT statement
     const keys = Object.keys(validatedRows[0]);
@@ -293,7 +323,21 @@ export class UpdateBuilder<TRow> {
     }
 
     // Validate with Zod partial schema
-    const validated = this.schema.partial().parse(this.setData);
+    let validated: Partial<TRow>;
+    try {
+      validated = this.schema.partial().parse(this.setData) as Partial<TRow>;
+    } catch (error) {
+      if (error instanceof ZodError) {
+        const firstIssue = error.issues[0];
+        const field = firstIssue?.path[0]?.toString() || "unknown";
+        throw new ValidationError(
+          `Validation failed for field '${field}': ${firstIssue?.message || "Invalid data"}`,
+          field,
+          error.issues
+        );
+      }
+      throw error;
+    }
 
     const setClause = Object.keys(validated)
       .map((k) => `${k} = ?`)
