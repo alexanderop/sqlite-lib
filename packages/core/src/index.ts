@@ -394,8 +394,8 @@ export async function createSQLiteClient<TSchema extends SchemaRegistry>(
    */
   function emit(table: string) {
     const set = emitter.get(table);
-    if (!set) return;
-    for (const cb of set) cb();
+    if (!set) {return;}
+    for (const cb of set) {cb();}
   }
 
   /**
@@ -406,12 +406,12 @@ export async function createSQLiteClient<TSchema extends SchemaRegistry>(
    * @internal
    */
   function subscribe(table: string, cb: () => void) {
-    if (!emitter.has(table)) emitter.set(table, new Set());
+    if (!emitter.has(table)) {emitter.set(table, new Set());}
     const tableSet = emitter.get(table);
-    if (tableSet) tableSet.add(cb);
+    if (tableSet) {tableSet.add(cb);}
     return () => {
       const tableSet = emitter.get(table);
-      if (tableSet) tableSet.delete(cb);
+      if (tableSet) {tableSet.delete(cb);}
     };
   }
 
@@ -421,7 +421,7 @@ export async function createSQLiteClient<TSchema extends SchemaRegistry>(
    * @internal
    */
   async function init() {
-    if (promiser && dbId) return;
+    if (promiser && dbId) {return;}
 
     promiser = await new Promise((resolve) => {
       const p = sqlite3Worker1Promiser({
@@ -470,7 +470,7 @@ export async function createSQLiteClient<TSchema extends SchemaRegistry>(
 
       // Run pending migrations in order
       // eslint-disable-next-line unicorn/no-array-sort
-      const ordered = opts.migrations.slice().sort((a, b) => a.version - b.version);
+      const ordered = [...opts.migrations].sort((a, b) => a.version - b.version);
       for (const mig of ordered) {
         if (!appliedVersions.has(mig.version)) {
           // eslint-disable-next-line no-await-in-loop
@@ -593,7 +593,7 @@ export async function createSQLiteClient<TSchema extends SchemaRegistry>(
 
     // Resource management
     async close() {
-      if (closed) return; // Idempotent - safe to call multiple times
+      if (closed) {return;} // Idempotent - safe to call multiple times
 
       if (promiser && dbId) {
         await promiser("close", { dbId });

@@ -15,7 +15,7 @@ const editingTitle = ref("");
 const dbPromise = useSQLiteClientAsync();
 
 async function addTodo() {
-  if (!newTitle.value.trim()) return;
+  if (!newTitle.value.trim()) {return;}
 
   const db = await dbPromise;
 
@@ -55,7 +55,7 @@ function cancelEdit() {
 }
 
 async function updateTodo(id: string) {
-  if (!editingTitle.value.trim()) return;
+  if (!editingTitle.value.trim()) {return;}
 
   const db = await dbPromise;
 

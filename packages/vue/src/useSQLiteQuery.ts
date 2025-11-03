@@ -133,7 +133,7 @@ export function useSQLiteQuery<T>(
   const unsubs: Array<() => void> = [];
 
   async function run() {
-    if (!db) return;
+    if (!db) {return;}
     loading.value = true;
     try {
       rows.value = await queryFn(db);
@@ -151,7 +151,7 @@ export function useSQLiteQuery<T>(
 
     if (options.tables) {
       for (const table of options.tables) {
-        if (!db) return;
+        if (!db) {return;}
         const unsub = db.subscribe(table, run);
         unsubs.push(unsub);
       }

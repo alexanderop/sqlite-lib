@@ -161,7 +161,7 @@ export function createTypedComposables<TSchema extends SchemaRegistry>() {
     const unsubs: Array<() => void> = [];
 
     async function run() {
-      if (!db) return;
+      if (!db) {return;}
       loading.value = true;
       try {
         rows.value = await queryFn(db);
@@ -179,7 +179,7 @@ export function createTypedComposables<TSchema extends SchemaRegistry>() {
 
       if (options.tables) {
         for (const table of options.tables) {
-          if (!db) return;
+          if (!db) {return;}
           const unsub = db.subscribe(table, run);
           unsubs.push(unsub);
         }

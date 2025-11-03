@@ -118,7 +118,7 @@ describe("Transactions", () => {
       const sender = await tx.query("accounts").where("id", "=", 1).first();
       const receiver = await tx.query("accounts").where("id", "=", 2).first();
 
-      if (!sender || !receiver) throw new Error("Accounts not found");
+      if (!sender || !receiver) {throw new Error("Accounts not found");}
 
       const transferAmount = 200;
       await tx.update("accounts").where("id", "=", 1).set({ balance: sender.balance - transferAmount }).execute();

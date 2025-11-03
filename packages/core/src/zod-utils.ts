@@ -16,12 +16,12 @@ export function zodTypeToSQL(schema: z.ZodTypeAny): string {
   }
 
   // Map primitive types
-  if (schema instanceof z.ZodString) return "TEXT";
-  if (schema instanceof z.ZodNumber) return "REAL";
-  if (schema instanceof z.ZodBoolean) return "INTEGER";
-  if (schema instanceof z.ZodDate) return "TEXT";
-  if (schema instanceof z.ZodEnum) return "TEXT";
-  if (schema instanceof z.ZodLiteral) return "TEXT";
+  if (schema instanceof z.ZodString) {return "TEXT";}
+  if (schema instanceof z.ZodNumber) {return "REAL";}
+  if (schema instanceof z.ZodBoolean) {return "INTEGER";}
+  if (schema instanceof z.ZodDate) {return "TEXT";}
+  if (schema instanceof z.ZodEnum) {return "TEXT";}
+  if (schema instanceof z.ZodLiteral) {return "TEXT";}
 
   // Fallback
   return "TEXT";
@@ -31,9 +31,9 @@ export function zodTypeToSQL(schema: z.ZodTypeAny): string {
  * Check if a Zod schema is optional/nullable
  */
 export function isOptional(schema: z.ZodTypeAny): boolean {
-  if (schema instanceof z.ZodOptional) return true;
-  if (schema instanceof z.ZodNullable) return true;
-  if (schema instanceof z.ZodDefault) return true;
+  if (schema instanceof z.ZodOptional) {return true;}
+  if (schema instanceof z.ZodNullable) {return true;}
+  if (schema instanceof z.ZodDefault) {return true;}
   return false;
 }
 
