@@ -1,6 +1,6 @@
 import { ref, onMounted, onBeforeUnmount, type Ref } from "vue";
 import { useSQLiteClientAsync } from "./useSQLiteClientAsync";
-import type { SQLiteClient } from "@alexop/sqlite-core";
+import type { SQLiteClient, SchemaRegistry } from "@alexop/sqlite-core";
 
 export interface UseSQLiteQueryReturn<T> {
   rows: Ref<T | null>;
@@ -15,13 +15,13 @@ export interface UseSQLiteQueryReturn<T> {
  * @param options - Options including tables to watch for changes
  */
 export function useSQLiteQuery<T>(
-  queryFn: (db: SQLiteClient<any>) => Promise<T>,
+  queryFn: (db: SQLiteClient<SchemaRegistry>) => Promise<T>,
   options: { tables?: string[] } = {}
 ): UseSQLiteQueryReturn<T> {
   const rows = ref<T | null>(null);
   const loading = ref(true);
   const error = ref<Error | null>(null);
-  let db: SQLiteClient<any> | null = null;
+  let db: SQLiteClient<SchemaRegistry> | null = null;
   const unsubs: Array<() => void> = [];
 
   async function run() {
@@ -43,7 +43,8 @@ export function useSQLiteQuery<T>(
 
     if (options.tables) {
       options.tables.forEach((table) => {
-        const unsub = db!.subscribe(table, run);
+        if (!db) return;
+        const unsub = db.subscribe(table, run);
         unsubs.push(unsub);
       });
     }

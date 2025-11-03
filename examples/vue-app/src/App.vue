@@ -40,7 +40,14 @@ async function deleteTodo(id: string) {
   db.notifyTable("todos");
 }
 
-function startEdit(todo: any) {
+interface Todo {
+  id: string;
+  title: string;
+  completed: boolean;
+  createdAt: string;
+}
+
+function startEdit(todo: Todo) {
   editingId.value = todo.id;
   editingTitle.value = todo.title;
 }

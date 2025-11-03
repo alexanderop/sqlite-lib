@@ -160,7 +160,7 @@ describe("Migrations", () => {
     expect(migrations[2].version).toBe(3);
   });
 
-  it("should start fresh database with no applied migrations", async () => {
+  it("should start fresh database with no applied migrations", async ({ expect }) => {
     const db = await createSQLiteClient({
       schema: testSchema,
       filename: `file:test-${crypto.randomUUID()}.sqlite3?vfs=opfs`,
@@ -168,6 +168,7 @@ describe("Migrations", () => {
     });
 
     // Should not error even with no migrations
-    await db.exec("SELECT 1");
+    const result = await db.exec("SELECT 1");
+    expect(result).toBeDefined();
   });
 });

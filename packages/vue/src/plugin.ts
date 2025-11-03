@@ -4,7 +4,6 @@ import {
   createSQLiteClient,
   type Migration,
   type SchemaRegistry,
-  type SQLiteClient,
 } from "@alexop/sqlite-core";
 
 export type SQLiteOptions<TSchema extends SchemaRegistry> = {

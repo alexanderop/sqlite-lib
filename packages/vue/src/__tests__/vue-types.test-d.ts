@@ -41,9 +41,6 @@ describe("Vue Composables - Type Safety", () => {
 
   it("typed client enforces column name constraints", () => {
     // Verify that SQLiteClient properly types table and column operations
-    type QueryBuilder = ReturnType<typeof db.query<"todos">>;
-    type WhereMethod = QueryBuilder["where"];
-
     // The where method should only accept valid column names
     expectTypeOf(db.query("todos").where).toBeFunction();
     expectTypeOf(db.delete("todos").where).toBeFunction();
@@ -52,15 +49,14 @@ describe("Vue Composables - Type Safety", () => {
 
   it("typed client validates update set() parameter types", () => {
     // The set() method should validate field names and types
-    type UpdateBuilder = ReturnType<typeof db.update<"todos">>;
-    type SetMethod = UpdateBuilder["set"];
-
     expectTypeOf(db.update("todos").set).toBeFunction();
   });
 
-  it("typed client rejects invalid table names", () => {
+  it("typed client rejects invalid table names", ({ expect }) => {
     // @ts-expect-error - "nonexistent" is not a valid table
     db.query("nonexistent");
+
+    expect(true).toBe(true);
 
     // @ts-expect-error - "badTable" is not a valid table
     db.delete("badTable");

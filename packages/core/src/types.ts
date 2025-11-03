@@ -3,12 +3,12 @@ import type { z } from "zod";
 /**
  * Schema registry type - maps table names to Zod schemas
  */
-export type SchemaRegistry = Record<string, z.ZodObject<any>>;
+export type SchemaRegistry = Record<string, z.ZodObject<z.ZodRawShape>>;
 
 /**
  * Infer TypeScript type from Zod schema
  */
-export type InferSchema<T extends z.ZodObject<any>> = z.infer<T>;
+export type InferSchema<T extends z.ZodObject<z.ZodRawShape>> = z.infer<T>;
 
 /**
  * Get all table names from schema registry

@@ -10,10 +10,10 @@ declare module "@sqlite.org/sqlite-wasm" {
   export type Message = {
     type: MessageType;
     messageId?: string;
-    args?: any;
+    args?: Record<string, unknown>;
     dbId?: string;
     sql?: string;
-    bind?: any[];
+    bind?: unknown[];
     returnValue?: string;
     filename?: string;
   };
@@ -24,14 +24,14 @@ declare module "@sqlite.org/sqlite-wasm" {
     dbId?: string;
     result?: {
       message?: string;
-      resultRows?: any[];
+      resultRows?: Record<string, unknown>[];
       dbId?: string;
     };
   };
 
   export type WorkerAPI = (
     type: MessageType,
-    args?: any
+    args?: Record<string, unknown>
   ) => Promise<Response>;
 
   export function sqlite3Worker1Promiser(config: {

@@ -6,9 +6,9 @@ import type { SQLOperator } from "./types";
  */
 export class InsertBuilder<TRow> {
   constructor(
-    private executeQuery: (sql: string, params: unknown[]) => Promise<any>,
+    private executeQuery: <T = unknown>(sql: string, params: unknown[]) => Promise<T[]>,
     private tableName: string,
-    private schema: z.ZodObject<any>
+    private schema: z.ZodObject<z.ZodRawShape>
   ) {}
 
   /**
@@ -30,8 +30,8 @@ export class InsertBuilder<TRow> {
     const result = await this.executeQuery(
       "SELECT last_insert_rowid() as id",
       []
-    );
-    return (result[0] as any)?.id || 0;
+    ) as Array<{ id: number }>;
+    return result[0]?.id || 0;
   }
 }
 
@@ -44,9 +44,9 @@ export class UpdateBuilder<TRow> {
   private setData: Partial<TRow> | undefined;
 
   constructor(
-    private executeQuery: (sql: string, params: unknown[]) => Promise<any>,
+    private executeQuery: <T = unknown>(sql: string, params: unknown[]) => Promise<T[]>,
     private tableName: string,
-    private schema: z.ZodObject<any>
+    private schema: z.ZodObject<z.ZodRawShape>
   ) {}
 
   /**
@@ -106,8 +106,8 @@ export class UpdateBuilder<TRow> {
     await this.executeQuery(sql, params);
 
     // Get number of affected rows
-    const result = await this.executeQuery("SELECT changes() as count", []);
-    return (result[0] as any)?.count || 0;
+    const result = await this.executeQuery("SELECT changes() as count", []) as Array<{ count: number }>;
+    return result[0]?.count || 0;
   }
 }
 
@@ -119,7 +119,7 @@ export class DeleteBuilder<TRow> {
   private whereParams: unknown[] = [];
 
   constructor(
-    private executeQuery: (sql: string, params: unknown[]) => Promise<any>,
+    private executeQuery: <T = unknown>(sql: string, params: unknown[]) => Promise<T[]>,
     private tableName: string
   ) {}
 
@@ -160,7 +160,7 @@ export class DeleteBuilder<TRow> {
     await this.executeQuery(sql, this.whereParams);
 
     // Get number of affected rows
-    const result = await this.executeQuery("SELECT changes() as count", []);
-    return (result[0] as any)?.count || 0;
+    const result = await this.executeQuery("SELECT changes() as count", []) as Array<{ count: number }>;
+    return result[0]?.count || 0;
   }
 }

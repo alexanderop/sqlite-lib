@@ -13,9 +13,9 @@ export class QueryBuilder<TRow, TSelected extends keyof TRow | undefined = undef
   private offsetCount: number | undefined;
 
   constructor(
-    private executeQuery: (sql: string, params: unknown[]) => Promise<any[]>,
+    private executeQuery: <T = unknown>(sql: string, params: unknown[]) => Promise<T[]>,
     private tableName: string,
-    private schema: z.ZodObject<any>
+    private schema: z.ZodObject<z.ZodRawShape>
   ) {}
 
   /**
@@ -48,7 +48,7 @@ export class QueryBuilder<TRow, TSelected extends keyof TRow | undefined = undef
     ...fields: K[]
   ): QueryBuilder<TRow, K> {
     this.selectedFields = fields.map((f) => String(f));
-    return this as any;
+    return this as unknown as QueryBuilder<TRow, K>;
   }
 
   /**
@@ -106,7 +106,7 @@ export class QueryBuilder<TRow, TSelected extends keyof TRow | undefined = undef
    */
   async all(): Promise<QueryResult<TRow, TSelected>[]> {
     const { sql, params } = this.buildSQL();
-    return this.executeQuery(sql, params);
+    return this.executeQuery<QueryResult<TRow, TSelected>>(sql, params);
   }
 
   /**
@@ -117,7 +117,7 @@ export class QueryBuilder<TRow, TSelected extends keyof TRow | undefined = undef
     this.limitCount = 1;
 
     const { sql, params } = this.buildSQL();
-    const results = await this.executeQuery(sql, params);
+    const results = await this.executeQuery<QueryResult<TRow, TSelected>>(sql, params);
 
     this.limitCount = originalLimit;
     return results[0] || null;
@@ -133,7 +133,7 @@ export class QueryBuilder<TRow, TSelected extends keyof TRow | undefined = undef
       sql += ` WHERE ${this.whereClauses.join(" AND ")}`;
     }
 
-    const results = await this.executeQuery(sql, this.whereParams);
-    return (results[0] as any)?.count || 0;
+    const results = await this.executeQuery(sql, this.whereParams) as Array<{ count: number }>;
+    return results[0]?.count || 0;
   }
 }

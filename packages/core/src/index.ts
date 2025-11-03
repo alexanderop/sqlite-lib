@@ -43,8 +43,8 @@ export type SQLiteClient<TSchema extends SchemaRegistry> = {
   subscribe(table: TableName<TSchema>, cb: () => void): () => void;
 
   // Raw query access for advanced usage
-  exec(sql: string, params?: unknown[]): Promise<any>;
-  raw<T = any>(sql: string, params?: unknown[]): Promise<T[]>;
+  exec(sql: string, params?: unknown[]): Promise<unknown>;
+  raw<T = unknown>(sql: string, params?: unknown[]): Promise<T[]>;
 };
 
 type Options<TSchema extends SchemaRegistry> = {
@@ -69,9 +69,11 @@ export async function createSQLiteClient<TSchema extends SchemaRegistry>(
 
   function subscribe(table: string, cb: () => void) {
     if (!emitter.has(table)) emitter.set(table, new Set());
-    emitter.get(table)!.add(cb);
+    const tableSet = emitter.get(table);
+    if (tableSet) tableSet.add(cb);
     return () => {
-      emitter.get(table)!.delete(cb);
+      const tableSet = emitter.get(table);
+      if (tableSet) tableSet.delete(cb);
     };
   }
 
@@ -123,19 +125,22 @@ export async function createSQLiteClient<TSchema extends SchemaRegistry>(
       });
 
       const appliedVersions = new Set(
-        (appliedResult.result?.resultRows ?? []).map((row: any) => row.version)
+        (appliedResult.result?.resultRows ?? []).map((row) => (row as { version: number }).version)
       );
 
       // Run pending migrations in order
-      const ordered = opts.migrations.sort((a, b) => a.version - b.version);
+      // eslint-disable-next-line unicorn/no-array-sort
+      const ordered = opts.migrations.slice().sort((a, b) => a.version - b.version);
       for (const mig of ordered) {
         if (!appliedVersions.has(mig.version)) {
+          // eslint-disable-next-line no-await-in-loop
           await promiser("exec", {
             dbId,
             sql: mig.sql,
           });
 
           // Record migration as applied
+          // eslint-disable-next-line no-await-in-loop
           await promiser("exec", {
             dbId,
             sql: "INSERT INTO __migrations__ (version) VALUES (?)",
@@ -170,7 +175,7 @@ export async function createSQLiteClient<TSchema extends SchemaRegistry>(
     return result;
   }
 
-  async function executeQuery<T = any>(
+  async function executeQuery<T = unknown>(
     sql: string,
     params: unknown[] = []
   ): Promise<T[]> {
@@ -182,19 +187,19 @@ export async function createSQLiteClient<TSchema extends SchemaRegistry>(
   return {
     // Query builder
     query<TTable extends TableName<TSchema>>(table: TTable) {
-      const schema = opts.schema[table] as z.ZodObject<any>;
+      const schema = opts.schema[table] as z.ZodObject<z.ZodRawShape>;
       return new QueryBuilder(executeQuery, String(table), schema);
     },
 
     // Insert builder
     insert<TTable extends TableName<TSchema>>(table: TTable) {
-      const schema = opts.schema[table] as z.ZodObject<any>;
+      const schema = opts.schema[table] as z.ZodObject<z.ZodRawShape>;
       return new InsertBuilder(executeQuery, String(table), schema);
     },
 
     // Update builder
     update<TTable extends TableName<TSchema>>(table: TTable) {
-      const schema = opts.schema[table] as z.ZodObject<any>;
+      const schema = opts.schema[table] as z.ZodObject<z.ZodRawShape>;
       return new UpdateBuilder(executeQuery, String(table), schema);
     },
 

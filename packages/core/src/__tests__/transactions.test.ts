@@ -99,11 +99,14 @@ describe("Transactions", () => {
       ],
     });
 
+    // Zod error format changed - just check that it throws
     await expect(
       db.transaction(async (tx) => {
         await tx.insert("todos").values({ id: "1", title: "Valid" });
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await tx.insert("todos").values({ id: "2", title: "" } as any); // Empty title fails validation
       })
+    // eslint-disable-next-line jest/require-to-throw-message
     ).rejects.toThrow();
 
     const result = await db.query("todos").all();
@@ -135,9 +138,11 @@ describe("Transactions", () => {
       const sender = await tx.query("accounts").where("id", "=", 1).first();
       const receiver = await tx.query("accounts").where("id", "=", 2).first();
 
+      if (!sender || !receiver) throw new Error("Accounts not found");
+
       const transferAmount = 200;
-      await tx.update("accounts").where("id", "=", 1).set({ balance: sender!.balance - transferAmount }).execute();
-      await tx.update("accounts").where("id", "=", 2).set({ balance: receiver!.balance + transferAmount }).execute();
+      await tx.update("accounts").where("id", "=", 1).set({ balance: sender.balance - transferAmount }).execute();
+      await tx.update("accounts").where("id", "=", 2).set({ balance: receiver.balance + transferAmount }).execute();
     });
 
     const accounts = await db.query("accounts").all();
@@ -227,6 +232,8 @@ describe("Transactions", () => {
 
     const tx1 = await db.beginTransaction();
 
+    // Error message format may vary
+    // eslint-disable-next-line jest/require-to-throw-message
     await expect(db.beginTransaction()).rejects.toThrow();
 
     await tx1.rollback();

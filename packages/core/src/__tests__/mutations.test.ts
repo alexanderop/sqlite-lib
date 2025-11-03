@@ -80,7 +80,7 @@ describe("Mutations", () => {
         name: "Test",
         email: "not-an-email",
       })
-    ).rejects.toThrow();
+    ).rejects.toThrow("Invalid email");
   });
 
   it("should update single field with WHERE", async () => {
@@ -121,7 +121,8 @@ describe("Mutations", () => {
 
     await db
       .update("todos")
-      .where("completed", "=", 0)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .where("completed", "=", 0 as any)
       .where("priority", "=", "high")
       .set({ title: "Updated" })
       .execute();
@@ -151,7 +152,7 @@ describe("Mutations", () => {
     // Invalid email
     await expect(
       db.update("users").where("id", "=", 1).set({ email: "invalid-email" }).execute()
-    ).rejects.toThrow();
+    ).rejects.toThrow("Invalid email");
   });
 
   it("should delete single row with WHERE", async () => {
@@ -192,7 +193,8 @@ describe("Mutations", () => {
     await db.insert("todos").values({ id: "2", title: "Task 2", completed: true });
     await db.insert("todos").values({ id: "3", title: "Task 3", completed: false });
 
-    await db.delete("todos").where("completed", "=", 1).execute();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await db.delete("todos").where("completed", "=", 1 as any).execute();
 
     const result = await db.query("todos").all();
     expect(result).toHaveLength(1);
@@ -213,7 +215,8 @@ describe("Mutations", () => {
 
     await db.insert("todos").values({ id: "1", title: "First" });
 
-    // Duplicate primary key
+    // Duplicate primary key - error message varies by browser
+    // eslint-disable-next-line jest/require-to-throw-message
     await expect(db.insert("todos").values({ id: "1", title: "Duplicate" })).rejects.toThrow();
   });
 

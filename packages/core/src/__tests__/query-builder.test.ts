@@ -96,7 +96,9 @@ describe("Query Builder", () => {
     const result = await db.query("todos").where("priority", "IN", ["high", "low"]).all();
 
     expect(result).toHaveLength(2);
-    expect(result.map((r) => r.id).sort()).toEqual(["1", "3"]);
+    const ids = result.map((r) => r.id);
+    // eslint-disable-next-line unicorn/no-array-sort
+    expect(ids.sort()).toEqual(["1", "3"]);
   });
 
   it("should sort with ORDER BY", async () => {

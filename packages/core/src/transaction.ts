@@ -19,7 +19,7 @@ export class Transaction<TSchema extends SchemaRegistry> {
   private state: TransactionState = TransactionState.Active;
 
   constructor(
-    private executeQuery: (sql: string, params: unknown[]) => Promise<any>,
+    private executeQuery: <T = unknown>(sql: string, params: unknown[]) => Promise<T[]>,
     private schema: TSchema
   ) {}
 
@@ -40,7 +40,7 @@ export class Transaction<TSchema extends SchemaRegistry> {
    */
   query<TTable extends TableName<TSchema>>(table: TTable): QueryBuilder<TableRow<TSchema, TTable>> {
     this.ensureActive();
-    const tableSchema = this.schema[table] as z.ZodObject<any>;
+    const tableSchema = this.schema[table] as z.ZodObject<z.ZodRawShape>;
     return new QueryBuilder(this.executeQuery, String(table), tableSchema);
   }
 
@@ -49,7 +49,7 @@ export class Transaction<TSchema extends SchemaRegistry> {
    */
   insert<TTable extends TableName<TSchema>>(table: TTable): InsertBuilder<TableRow<TSchema, TTable>> {
     this.ensureActive();
-    const tableSchema = this.schema[table] as z.ZodObject<any>;
+    const tableSchema = this.schema[table] as z.ZodObject<z.ZodRawShape>;
     return new InsertBuilder(this.executeQuery, String(table), tableSchema);
   }
 
@@ -58,7 +58,7 @@ export class Transaction<TSchema extends SchemaRegistry> {
    */
   update<TTable extends TableName<TSchema>>(table: TTable): UpdateBuilder<TableRow<TSchema, TTable>> {
     this.ensureActive();
-    const tableSchema = this.schema[table] as z.ZodObject<any>;
+    const tableSchema = this.schema[table] as z.ZodObject<z.ZodRawShape>;
     return new UpdateBuilder(this.executeQuery, String(table), tableSchema);
   }
 

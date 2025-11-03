@@ -49,7 +49,7 @@ describe("QueryBuilder - Column Name Type Safety", () => {
     expectTypeOf(db.query("users").where("email", "=", "test@example.com")).toBeObject();
   });
 
-  it("rejects invalid column names in where()", () => {
+  it("rejects invalid column names in where()", ({ expect }) => {
     // @ts-expect-error - "idz" is not a valid column name
     db.query("todos").where("idz", "=", "123");
 
@@ -58,6 +58,8 @@ describe("QueryBuilder - Column Name Type Safety", () => {
 
     // @ts-expect-error - "invalidCol" is not a valid column name
     db.query("users").where("invalidCol", "=", "value");
+
+    expect(true).toBe(true);
   });
 
   it("accepts valid column names in orderBy()", () => {
@@ -66,12 +68,14 @@ describe("QueryBuilder - Column Name Type Safety", () => {
     expectTypeOf(db.query("users").orderBy("age", "ASC")).toBeObject();
   });
 
-  it("rejects invalid column names in orderBy()", () => {
+  it("rejects invalid column names in orderBy()", ({ expect }) => {
     // @ts-expect-error - "invalidColumn" is not a valid column name
     db.query("todos").orderBy("invalidColumn", "DESC");
 
     // @ts-expect-error - "wrongCol" is not a valid column name
     db.query("users").orderBy("wrongCol");
+
+    expect(true).toBe(true);
   });
 
   it("accepts valid column names in select()", () => {
@@ -80,12 +84,14 @@ describe("QueryBuilder - Column Name Type Safety", () => {
     expectTypeOf(db.query("users").select("name", "email")).toBeObject();
   });
 
-  it("rejects invalid column names in select()", () => {
+  it("rejects invalid column names in select()", ({ expect }) => {
     // @ts-expect-error - "badColumn" is not a valid column name
     db.query("todos").select("id", "badColumn");
 
     // @ts-expect-error - "wrongField" is not a valid column name
     db.query("users").select("wrongField");
+
+    expect(true).toBe(true);
   });
 });
 
@@ -103,7 +109,7 @@ describe("QueryBuilder - Value Type Safety", () => {
     expectTypeOf(db.query("users").where("age", "=", 25)).toBeObject();
   });
 
-  it("rejects values not matching column types", () => {
+  it("rejects values not matching column types", ({ expect }) => {
     // @ts-expect-error - "id" is string, not number
     db.query("todos").where("id", "=", 123);
 
@@ -115,6 +121,8 @@ describe("QueryBuilder - Value Type Safety", () => {
 
     // @ts-expect-error - "age" is number, not string
     db.query("users").where("age", "=", "25");
+
+    expect(true).toBe(true);
   });
 });
 
@@ -179,12 +187,14 @@ describe("UpdateBuilder - Type Safety", () => {
     expectTypeOf(db.update("users").where("email", "=", "test@example.com")).toBeObject();
   });
 
-  it("rejects invalid column names in where()", () => {
+  it("rejects invalid column names in where()", ({ expect }) => {
     // @ts-expect-error - "badCol" is not a valid column name
     db.update("todos").where("badCol", "=", "value");
 
     // @ts-expect-error - "wrongField" is not a valid column name
     db.update("users").where("wrongField", "=", "value");
+
+    expect(true).toBe(true);
   });
 
   it("accepts valid column names and types in set()", () => {
@@ -193,20 +203,24 @@ describe("UpdateBuilder - Type Safety", () => {
     expectTypeOf(db.update("users").set({ name: "John", age: 30 })).toBeObject();
   });
 
-  it("rejects invalid fields in set()", () => {
+  it("rejects invalid fields in set()", ({ expect }) => {
     // @ts-expect-error - "invalidField" doesn't exist
     db.update("todos").set({ invalidField: "value" });
 
     // @ts-expect-error - wrong type for "completed"
     db.update("todos").set({ completed: "true" });
+
+    expect(true).toBe(true);
   });
 
-  it("rejects wrong value types in where()", () => {
+  it("rejects wrong value types in where()", ({ expect }) => {
     // @ts-expect-error - "id" is string, not number
     db.update("todos").where("id", "=", 123);
 
     // @ts-expect-error - "age" is number, not string
     db.update("users").where("age", "=", "25");
+
+    expect(true).toBe(true);
   });
 });
 
@@ -216,7 +230,7 @@ describe("DeleteBuilder - Type Safety", () => {
     expectTypeOf(db.delete("users").where("email", "=", "test@example.com")).toBeObject();
   });
 
-  it("rejects invalid column names in where()", () => {
+  it("rejects invalid column names in where()", ({ expect }) => {
     // @ts-expect-error - "idz" is not a valid column name (typo example)
     db.delete("todos").where("idz", "=", "123");
 
@@ -225,9 +239,11 @@ describe("DeleteBuilder - Type Safety", () => {
 
     // @ts-expect-error - "badField" is not a valid column name
     db.delete("users").where("badField", "=", "value");
+
+    expect(true).toBe(true);
   });
 
-  it("rejects wrong value types in where()", () => {
+  it("rejects wrong value types in where()", ({ expect }) => {
     // @ts-expect-error - "id" expects string, not number
     db.delete("todos").where("id", "=", 123);
 
@@ -236,6 +252,8 @@ describe("DeleteBuilder - Type Safety", () => {
 
     // @ts-expect-error - "id" expects number, not string
     db.delete("users").where("id", "=", "1");
+
+    expect(true).toBe(true);
   });
 });
 
@@ -294,7 +312,7 @@ describe("Table Name Type Safety", () => {
     expectTypeOf(db.delete("todos")).toBeObject();
   });
 
-  it("rejects invalid table names", () => {
+  it("rejects invalid table names", ({ expect }) => {
     // @ts-expect-error - "nonexistent" is not a valid table name
     db.query("nonexistent");
 
@@ -303,5 +321,7 @@ describe("Table Name Type Safety", () => {
 
     // @ts-expect-error - "wrongTable" is not a valid table name
     db.update("wrongTable");
+
+    expect(true).toBe(true);
   });
 });

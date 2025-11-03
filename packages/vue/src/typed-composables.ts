@@ -5,7 +5,7 @@
  * Import and use these in your components for full type safety.
  */
 
-import { inject } from "vue";
+import { inject, type InjectionKey } from "vue";
 import { ref, onMounted, onBeforeUnmount, type Ref } from "vue";
 import type { SchemaRegistry, SQLiteClient } from "@alexop/sqlite-core";
 import { SQLITE_CLIENT_KEY } from "./injection";
@@ -38,7 +38,7 @@ export interface UseSQLiteQueryReturn<T> {
 export function createTypedComposables<TSchema extends SchemaRegistry>() {
   function useSQLiteClientAsync(): Promise<SQLiteClient<TSchema>> {
     const promise = inject<Promise<SQLiteClient<TSchema>> | null>(
-      SQLITE_CLIENT_KEY as any,
+      SQLITE_CLIENT_KEY as InjectionKey<Promise<SQLiteClient<TSchema>>>,
       null
     );
     if (!promise) {
@@ -76,7 +76,8 @@ export function createTypedComposables<TSchema extends SchemaRegistry>() {
 
       if (options.tables) {
         options.tables.forEach((table) => {
-          const unsub = db!.subscribe(table, run);
+          if (!db) return;
+          const unsub = db.subscribe(table, run);
           unsubs.push(unsub);
         });
       }

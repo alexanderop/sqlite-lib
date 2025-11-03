@@ -40,7 +40,7 @@ export function isOptional(schema: z.ZodTypeAny): boolean {
 /**
  * Get default value from Zod schema if it has one
  */
-export function getDefaultValue(schema: z.ZodTypeAny): any {
+export function getDefaultValue(schema: z.ZodTypeAny): unknown {
   if (schema instanceof z.ZodDefault) {
     const defaultValue = schema._def.defaultValue;
     return typeof defaultValue === "function" ? defaultValue() : defaultValue;
@@ -53,7 +53,7 @@ export function getDefaultValue(schema: z.ZodTypeAny): any {
  */
 export function schemaToCreateTable(
   tableName: string,
-  schema: z.ZodObject<any>,
+  schema: z.ZodObject<z.ZodRawShape>,
   options: { primaryKey?: string } = {}
 ): string {
   const shape = schema.shape;
