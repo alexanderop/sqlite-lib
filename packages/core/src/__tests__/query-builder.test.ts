@@ -379,4 +379,97 @@ describe("Query Builder", () => {
     // eslint-disable-next-line unicorn/no-array-sort
     expect(ids.sort()).toEqual(["2", "3"]);
   });
+
+  it("should maintain immutability - query builder reuse", async () => {
+    const db = await createSQLiteClient({
+      filename: `file:test-${crypto.randomUUID()}.sqlite3?vfs=opfs`, migrations: [
+        {
+          sql: `CREATE TABLE todos (id TEXT PRIMARY KEY, title TEXT NOT NULL, completed INTEGER DEFAULT 0, priority TEXT DEFAULT 'medium', createdAt TEXT DEFAULT CURRENT_TIMESTAMP)`, version: 1,
+        },
+      ], schema: testSchema,
+    });
+
+    await db.insert("todos").values({ completed: false, id: "1", priority: "low", title: "Cheap" });
+    await db.insert("todos").values({ completed: false, id: "2", priority: "medium", title: "Mid" });
+    await db.insert("todos").values({ completed: false, id: "3", priority: "high", title: "Expensive" });
+    await db.insert("todos").values({ completed: true, id: "4", priority: "low", title: "Done" });
+
+    // Create base query
+    const baseQuery = db.query("todos").where("completed", "=", false);
+
+    // Branch 1: Filter by low priority
+    const lowPriority = await baseQuery.where("priority", "=", "low").all();
+    expect(lowPriority).toHaveLength(1);
+    expect(lowPriority[0].id).toBe("1");
+
+    // Branch 2: Filter by high priority (baseQuery should be unchanged)
+    const highPriority = await baseQuery.where("priority", "=", "high").all();
+    expect(highPriority).toHaveLength(1);
+    expect(highPriority[0].id).toBe("3");
+
+    // Original base query should still work with just completed filter
+    const allIncomplete = await baseQuery.all();
+    expect(allIncomplete).toHaveLength(3);
+  });
+
+  it("should maintain immutability - method chaining does not mutate", async () => {
+    const db = await createSQLiteClient({
+      filename: `file:test-${crypto.randomUUID()}.sqlite3?vfs=opfs`, migrations: [
+        {
+          sql: `CREATE TABLE todos (id TEXT PRIMARY KEY, title TEXT NOT NULL, completed INTEGER DEFAULT 0, priority TEXT DEFAULT 'medium', createdAt TEXT DEFAULT CURRENT_TIMESTAMP)`, version: 1,
+        },
+      ], schema: testSchema,
+    });
+
+    await db.insert("todos").values({ completed: false, id: "1", priority: "low", title: "Task 1" });
+    await db.insert("todos").values({ completed: false, id: "2", priority: "medium", title: "Task 2" });
+    await db.insert("todos").values({ completed: false, id: "3", priority: "high", title: "Task 3" });
+
+    const query1 = db.query("todos");
+    const query2 = query1.where("priority", "=", "low");
+    const query3 = query2.orderBy("title", "DESC");
+    const query4 = query3.limit(1);
+
+    // query1 should still return all rows
+    const result1 = await query1.all();
+    expect(result1).toHaveLength(3);
+
+    // query2 should return only low priority (no order or limit)
+    const result2 = await query2.all();
+    expect(result2).toHaveLength(1);
+    expect(result2[0].priority).toBe("low");
+
+    // query3 should have where + orderBy (no limit)
+    const result3 = await query3.all();
+    expect(result3).toHaveLength(1);
+
+    // query4 should have all modifications
+    const result4 = await query4.all();
+    expect(result4).toHaveLength(1);
+    expect(result4[0].priority).toBe("low");
+  });
+
+  it("should maintain immutability - first() does not mutate limit", async () => {
+    const db = await createSQLiteClient({
+      filename: `file:test-${crypto.randomUUID()}.sqlite3?vfs=opfs`, migrations: [
+        {
+          sql: `CREATE TABLE todos (id TEXT PRIMARY KEY, title TEXT NOT NULL, completed INTEGER DEFAULT 0, priority TEXT DEFAULT 'medium', createdAt TEXT DEFAULT CURRENT_TIMESTAMP)`, version: 1,
+        },
+      ], schema: testSchema,
+    });
+
+    await db.insert("todos").values({ completed: false, id: "1", title: "Task 1" });
+    await db.insert("todos").values({ completed: false, id: "2", title: "Task 2" });
+    await db.insert("todos").values({ completed: false, id: "3", title: "Task 3" });
+
+    const query = db.query("todos");
+
+    // Call first() - this internally sets limit to 1
+    const firstResult = await query.first();
+    expect(firstResult).not.toBeNull();
+
+    // Calling all() after first() should still return all rows (query should be unchanged)
+    const allResults = await query.all();
+    expect(allResults).toHaveLength(3);
+  });
 });

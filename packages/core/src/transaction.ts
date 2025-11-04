@@ -98,7 +98,7 @@ export class Transaction<TSchema extends SchemaRegistry> {
   query<TTable extends TableName<TSchema>>(table: TTable): QueryBuilder<TableRow<TSchema, TTable>> {
     this.ensureActive();
     const tableSchema = this.schema[table] as z.ZodObject<z.ZodRawShape>;
-    return new QueryBuilder(this.executeQuery, String(table), tableSchema);
+    return QueryBuilder.create<TableRow<TSchema, TTable>>(this.executeQuery, String(table), tableSchema);
   }
 
   /**

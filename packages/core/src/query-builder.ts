@@ -2,10 +2,33 @@ import type { z } from "zod";
 import type { QueryResult, SQLOperator, SortDirection } from "./types";
 
 /**
+ * Immutable properties for QueryBuilder
+ * All properties are readonly to prevent accidental mutations
+ * @internal
+ */
+interface QueryBuilderProps<_TRow, _TSelected> {
+  readonly executeQuery: <T = unknown>(sql: string, params: unknown[]) => Promise<T[]>;
+  readonly tableName: string;
+  readonly schema: z.ZodObject<z.ZodRawShape>;
+  readonly whereClauses: readonly string[];
+  readonly whereParams: readonly unknown[];
+  readonly whereConjunctions: readonly ('AND' | 'OR')[];
+  readonly selectedFields: readonly string[] | undefined;
+  readonly orderByClause: string | undefined;
+  readonly limitCount: number | undefined;
+  readonly offsetCount: number | undefined;
+  readonly aggregates: ReadonlyArray<{ func: string; column: string; alias: string }>;
+  readonly groupByFields: readonly string[];
+}
+
+/**
  * Query builder for SELECT queries with method chaining
  *
  * Provides a fluent API for building type-safe SELECT queries. Supports WHERE conditions,
  * field selection, sorting, pagination, and multiple execution modes (all, first, count).
+ *
+ * This QueryBuilder follows an immutable pattern - each method call returns a new instance
+ * without modifying the original. This allows safe query builder reuse and composition.
  *
  * @template TRow - Full row type from the table schema
  * @template TSelected - Selected field keys (undefined means all fields)
@@ -32,31 +55,50 @@ import type { QueryResult, SQLOperator, SortDirection } from "./types";
  *   .limit(10)
  *   .skip(20)
  *   .all();
+ *
+ * // Safe query builder reuse (immutability)
+ * const baseQuery = db.query('products').where('published', '=', true);
+ * const cheap = await baseQuery.where('price', '<', 20).all();
+ * const expensive = await baseQuery.where('price', '>', 100).all();
+ * // baseQuery remains unchanged
  * ```
  */
 export class QueryBuilder<TRow, TSelected extends keyof TRow | undefined = undefined> {
-  private whereClauses: string[] = [];
-  private whereParams: unknown[] = [];
-  private whereConjunctions: ('AND' | 'OR')[] = [];
-  private selectedFields: string[] | undefined;
-  private orderByClause: string | undefined;
-  private limitCount: number | undefined;
-  private offsetCount: number | undefined;
-  private aggregates: Array<{ func: string; column: string; alias: string }> = [];
-  private groupByFields: string[] = [];
+  readonly #props: QueryBuilderProps<TRow, TSelected>;
 
   /**
    * Create a new QueryBuilder instance
-   * @param executeQuery - Function to execute SQL queries
-   * @param tableName - Name of the table to query
-   * @param schema - Zod schema for runtime validation
+   * @param props - Immutable properties object
    * @internal
    */
-  constructor(
-    private executeQuery: <T = unknown>(sql: string, params: unknown[]) => Promise<T[]>,
-    private tableName: string,
-    private schema: z.ZodObject<z.ZodRawShape>
-  ) {}
+  constructor(props: QueryBuilderProps<TRow, TSelected>) {
+    this.#props = Object.freeze(props);
+  }
+
+  /**
+   * Create initial QueryBuilder instance with default values
+   * @internal
+   */
+  static create<TRow>(
+    executeQuery: <T = unknown>(sql: string, params: unknown[]) => Promise<T[]>,
+    tableName: string,
+    schema: z.ZodObject<z.ZodRawShape>
+  ): QueryBuilder<TRow, undefined> {
+    return new QueryBuilder<TRow, undefined>({
+      executeQuery,
+      tableName,
+      schema,
+      whereClauses: [],
+      whereParams: [],
+      whereConjunctions: [],
+      selectedFields: undefined,
+      orderByClause: undefined,
+      limitCount: undefined,
+      offsetCount: undefined,
+      aggregates: [],
+      groupByFields: [],
+    });
+  }
 
   /**
    * Add a WHERE condition to filter results
@@ -92,6 +134,7 @@ export class QueryBuilder<TRow, TSelected extends keyof TRow | undefined = undef
    */
   /**
    * Internal method to add a WHERE condition with specified conjunction
+   * Returns new props object with the added condition
    * @internal
    */
   private addWhereCondition(
@@ -99,61 +142,79 @@ export class QueryBuilder<TRow, TSelected extends keyof TRow | undefined = undef
     operator: SQLOperator,
     value: unknown,
     conjunction: 'AND' | 'OR'
-  ): void {
+  ): QueryBuilderProps<TRow, TSelected> {
+    let newClauses: string[];
+    let newParams: unknown[];
+    let newConjunctions: ('AND' | 'OR')[];
+
     if (operator === 'IN' || operator === 'NOT IN') {
       const values = Array.isArray(value) ? value : [value];
       const placeholders = values.map(() => '?').join(', ');
-      if (this.whereClauses.length > 0) {
-        this.whereConjunctions.push(conjunction);
-      }
-      this.whereClauses.push(`${field} ${operator} (${placeholders})`);
-      this.whereParams.push(...values);
+      newClauses = [...this.#props.whereClauses, `${field} ${operator} (${placeholders})`];
+      newParams = [...this.#props.whereParams, ...values];
+      newConjunctions = this.#props.whereClauses.length > 0
+        ? [...this.#props.whereConjunctions, conjunction]
+        : [...this.#props.whereConjunctions];
     } else if (operator === 'IS NULL' || operator === 'IS NOT NULL') {
-      if (this.whereClauses.length > 0) {
-        this.whereConjunctions.push(conjunction);
-      }
-      this.whereClauses.push(`${field} ${operator}`);
-      // No parameter needed for IS NULL / IS NOT NULL
+      newClauses = [...this.#props.whereClauses, `${field} ${operator}`];
+      newParams = [...this.#props.whereParams];
+      newConjunctions = this.#props.whereClauses.length > 0
+        ? [...this.#props.whereConjunctions, conjunction]
+        : [...this.#props.whereConjunctions];
     } else if (operator === 'BETWEEN') {
       const values = Array.isArray(value) ? value : [];
       if (values.length !== 2) {
         throw new Error('BETWEEN operator requires an array of exactly 2 values');
       }
-      if (this.whereClauses.length > 0) {
-        this.whereConjunctions.push(conjunction);
-      }
-      this.whereClauses.push(`${field} ${operator} ? AND ?`);
-      this.whereParams.push(values[0], values[1]);
+      newClauses = [...this.#props.whereClauses, `${field} ${operator} ? AND ?`];
+      newParams = [...this.#props.whereParams, values[0], values[1]];
+      newConjunctions = this.#props.whereClauses.length > 0
+        ? [...this.#props.whereConjunctions, conjunction]
+        : [...this.#props.whereConjunctions];
     } else {
-      if (this.whereClauses.length > 0) {
-        this.whereConjunctions.push(conjunction);
-      }
-      this.whereClauses.push(`${field} ${operator} ?`);
-      this.whereParams.push(value);
+      newClauses = [...this.#props.whereClauses, `${field} ${operator} ?`];
+      newParams = [...this.#props.whereParams, value];
+      newConjunctions = this.#props.whereClauses.length > 0
+        ? [...this.#props.whereConjunctions, conjunction]
+        : [...this.#props.whereConjunctions];
     }
+
+    return {
+      ...this.#props,
+      whereClauses: newClauses,
+      whereParams: newParams,
+      whereConjunctions: newConjunctions,
+    };
   }
 
   where<K extends keyof TRow>(
     field: K | ((qb: QueryBuilder<TRow, TSelected>) => QueryBuilder<TRow, TSelected>),
     operator?: SQLOperator,
     value?: TRow[K] | TRow[K][] | null
-  ): this {
+  ): QueryBuilder<TRow, TSelected> {
     // Handle callback for grouped conditions
     if (typeof field === 'function') {
-      const subBuilder = new QueryBuilder<TRow, TSelected>(
-        this.executeQuery,
-        this.tableName,
-        this.schema
-      );
-      field(subBuilder);
+      const subBuilder = QueryBuilder.create<TRow>(
+        this.#props.executeQuery,
+        this.#props.tableName,
+        this.#props.schema
+      ) as QueryBuilder<TRow, TSelected>;
+      const resultBuilder = field(subBuilder);
 
-      if (subBuilder.whereClauses.length > 0) {
-        const groupedCondition = subBuilder.buildWhereClause();
-        if (this.whereClauses.length > 0) {
-          this.whereConjunctions.push('AND');
-        }
-        this.whereClauses.push(`(${groupedCondition})`);
-        this.whereParams.push(...subBuilder.whereParams);
+      if (resultBuilder.#props.whereClauses.length > 0) {
+        const groupedCondition = this.buildWhereClauseFromProps(resultBuilder.#props);
+        const newClauses = [...this.#props.whereClauses, `(${groupedCondition})`];
+        const newParams = [...this.#props.whereParams, ...resultBuilder.#props.whereParams];
+        const newConjunctions = this.#props.whereClauses.length > 0
+          ? [...this.#props.whereConjunctions, 'AND' as const]
+          : [...this.#props.whereConjunctions];
+
+        return new QueryBuilder({
+          ...this.#props,
+          whereClauses: newClauses,
+          whereParams: newParams,
+          whereConjunctions: newConjunctions,
+        });
       }
 
       return this;
@@ -161,7 +222,8 @@ export class QueryBuilder<TRow, TSelected extends keyof TRow | undefined = undef
 
     const fieldName = String(field);
     if (operator) {
-      this.addWhereCondition(fieldName, operator, value, 'AND');
+      const newProps = this.addWhereCondition(fieldName, operator, value, 'AND');
+      return new QueryBuilder(newProps);
     }
     return this;
   }
@@ -197,10 +259,10 @@ export class QueryBuilder<TRow, TSelected extends keyof TRow | undefined = undef
     field: K,
     operator: SQLOperator,
     value: TRow[K] | TRow[K][] | null
-  ): this {
+  ): QueryBuilder<TRow, TSelected> {
     const fieldName = String(field);
-    this.addWhereCondition(fieldName, operator, value, 'OR');
-    return this;
+    const newProps = this.addWhereCondition(fieldName, operator, value, 'OR');
+    return new QueryBuilder(newProps);
   }
 
   /**
@@ -232,8 +294,10 @@ export class QueryBuilder<TRow, TSelected extends keyof TRow | undefined = undef
   select<K extends keyof TRow>(
     ...fields: K[]
   ): QueryBuilder<TRow, K> {
-    this.selectedFields = fields.map((f) => String(f));
-    return this as unknown as QueryBuilder<TRow, K>;
+    return new QueryBuilder({
+      ...this.#props,
+      selectedFields: fields.map((f) => String(f)),
+    }) as unknown as QueryBuilder<TRow, K>;
   }
 
   /**
@@ -261,9 +325,11 @@ export class QueryBuilder<TRow, TSelected extends keyof TRow | undefined = undef
    *   .limit(10)
    * ```
    */
-  orderBy<K extends keyof TRow>(field: K, direction: SortDirection = 'ASC'): this {
-    this.orderByClause = `${String(field)} ${direction}`;
-    return this;
+  orderBy<K extends keyof TRow>(field: K, direction: SortDirection = 'ASC'): QueryBuilder<TRow, TSelected> {
+    return new QueryBuilder({
+      ...this.#props,
+      orderByClause: `${String(field)} ${direction}`,
+    });
   }
 
   /**
@@ -286,9 +352,11 @@ export class QueryBuilder<TRow, TSelected extends keyof TRow | undefined = undef
    *   .skip(40)
    * ```
    */
-  limit(count: number): this {
-    this.limitCount = count;
-    return this;
+  limit(count: number): QueryBuilder<TRow, TSelected> {
+    return new QueryBuilder({
+      ...this.#props,
+      limitCount: count,
+    });
   }
 
   /**
@@ -312,9 +380,11 @@ export class QueryBuilder<TRow, TSelected extends keyof TRow | undefined = undef
    *   .skip((page - 1) * pageSize)
    * ```
    */
-  skip(count: number): this {
-    this.offsetCount = count;
-    return this;
+  skip(count: number): QueryBuilder<TRow, TSelected> {
+    return new QueryBuilder({
+      ...this.#props,
+      offsetCount: count,
+    });
   }
 
   /**
@@ -348,15 +418,17 @@ export class QueryBuilder<TRow, TSelected extends keyof TRow | undefined = undef
    * ```
    */
   sum<K extends keyof TRow>(column: K): Promise<number | null>;
-  sum<K extends keyof TRow>(column: K, alias: string): this;
-  sum<K extends keyof TRow>(column: K, alias?: string): Promise<number | null> | this {
+  sum<K extends keyof TRow>(column: K, alias: string): QueryBuilder<TRow, TSelected>;
+  sum<K extends keyof TRow>(column: K, alias?: string): Promise<number | null> | QueryBuilder<TRow, TSelected> {
     if (alias === undefined) {
       // Terminal operation
       return this.executeAggregate('SUM', String(column));
     }
     // Chainable operation
-    this.aggregates.push({ func: 'SUM', column: String(column), alias });
-    return this;
+    return new QueryBuilder({
+      ...this.#props,
+      aggregates: [...this.#props.aggregates, { func: 'SUM', column: String(column), alias }],
+    });
   }
 
   /**
@@ -385,15 +457,17 @@ export class QueryBuilder<TRow, TSelected extends keyof TRow | undefined = undef
    * ```
    */
   avg<K extends keyof TRow>(column: K): Promise<number | null>;
-  avg<K extends keyof TRow>(column: K, alias: string): this;
-  avg<K extends keyof TRow>(column: K, alias?: string): Promise<number | null> | this {
+  avg<K extends keyof TRow>(column: K, alias: string): QueryBuilder<TRow, TSelected>;
+  avg<K extends keyof TRow>(column: K, alias?: string): Promise<number | null> | QueryBuilder<TRow, TSelected> {
     if (alias === undefined) {
       // Terminal operation
       return this.executeAggregate('AVG', String(column));
     }
     // Chainable operation
-    this.aggregates.push({ func: 'AVG', column: String(column), alias });
-    return this;
+    return new QueryBuilder({
+      ...this.#props,
+      aggregates: [...this.#props.aggregates, { func: 'AVG', column: String(column), alias }],
+    });
   }
 
   /**
@@ -422,15 +496,17 @@ export class QueryBuilder<TRow, TSelected extends keyof TRow | undefined = undef
    * ```
    */
   min<K extends keyof TRow>(column: K): Promise<number | null>;
-  min<K extends keyof TRow>(column: K, alias: string): this;
-  min<K extends keyof TRow>(column: K, alias?: string): Promise<number | null> | this {
+  min<K extends keyof TRow>(column: K, alias: string): QueryBuilder<TRow, TSelected>;
+  min<K extends keyof TRow>(column: K, alias?: string): Promise<number | null> | QueryBuilder<TRow, TSelected> {
     if (alias === undefined) {
       // Terminal operation
       return this.executeAggregate('MIN', String(column));
     }
     // Chainable operation
-    this.aggregates.push({ func: 'MIN', column: String(column), alias });
-    return this;
+    return new QueryBuilder({
+      ...this.#props,
+      aggregates: [...this.#props.aggregates, { func: 'MIN', column: String(column), alias }],
+    });
   }
 
   /**
@@ -459,15 +535,17 @@ export class QueryBuilder<TRow, TSelected extends keyof TRow | undefined = undef
    * ```
    */
   max<K extends keyof TRow>(column: K): Promise<number | null>;
-  max<K extends keyof TRow>(column: K, alias: string): this;
-  max<K extends keyof TRow>(column: K, alias?: string): Promise<number | null> | this {
+  max<K extends keyof TRow>(column: K, alias: string): QueryBuilder<TRow, TSelected>;
+  max<K extends keyof TRow>(column: K, alias?: string): Promise<number | null> | QueryBuilder<TRow, TSelected> {
     if (alias === undefined) {
       // Terminal operation
       return this.executeAggregate('MAX', String(column));
     }
     // Chainable operation
-    this.aggregates.push({ func: 'MAX', column: String(column), alias });
-    return this;
+    return new QueryBuilder({
+      ...this.#props,
+      aggregates: [...this.#props.aggregates, { func: 'MAX', column: String(column), alias }],
+    });
   }
 
   /**
@@ -497,9 +575,11 @@ export class QueryBuilder<TRow, TSelected extends keyof TRow | undefined = undef
    *   .all();
    * ```
    */
-  groupBy<K extends keyof TRow>(...fields: K[]): this {
-    this.groupByFields = fields.map((f) => String(f));
-    return this;
+  groupBy<K extends keyof TRow>(...fields: K[]): QueryBuilder<TRow, TSelected> {
+    return new QueryBuilder({
+      ...this.#props,
+      groupByFields: fields.map((f) => String(f)),
+    });
   }
 
   /**
@@ -507,13 +587,13 @@ export class QueryBuilder<TRow, TSelected extends keyof TRow | undefined = undef
    * @internal
    */
   private async executeAggregate(func: string, column: string): Promise<number | null> {
-    let sql = `SELECT ${func}(${column}) as result FROM ${this.tableName}`;
+    let sql = `SELECT ${func}(${column}) as result FROM ${this.#props.tableName}`;
 
-    if (this.whereClauses.length > 0) {
+    if (this.#props.whereClauses.length > 0) {
       sql += ` WHERE ${this.buildWhereClause()}`;
     }
 
-    const results = await this.executeQuery(sql, this.whereParams) as Array<{ result: number | null }>;
+    const results = await this.#props.executeQuery(sql, [...this.#props.whereParams]) as Array<{ result: number | null }>;
     const result = results[0]?.result;
 
     // For SUM and AVG, return 0 if null (no rows or all nulls)
@@ -531,14 +611,22 @@ export class QueryBuilder<TRow, TSelected extends keyof TRow | undefined = undef
    * @internal
    */
   private buildWhereClause(): string {
-    if (this.whereClauses.length === 0) {
+    return this.buildWhereClauseFromProps(this.#props);
+  }
+
+  /**
+   * Build WHERE clause from props object
+   * @internal
+   */
+  private buildWhereClauseFromProps(props: QueryBuilderProps<TRow, TSelected>): string {
+    if (props.whereClauses.length === 0) {
       return '';
     }
 
-    let result = this.whereClauses[0];
-    for (let i = 1; i < this.whereClauses.length; i++) {
-      const conjunction = this.whereConjunctions[i - 1] || 'AND';
-      result += ` ${conjunction} ${this.whereClauses[i]}`;
+    let result = props.whereClauses[0];
+    for (let i = 1; i < props.whereClauses.length; i++) {
+      const conjunction = props.whereConjunctions[i - 1] || 'AND';
+      result += ` ${conjunction} ${props.whereClauses[i]}`;
     }
 
     return result;
@@ -553,13 +641,13 @@ export class QueryBuilder<TRow, TSelected extends keyof TRow | undefined = undef
     let selectParts: string[] = [];
 
     // Add selected fields
-    if (this.selectedFields && this.selectedFields.length > 0) {
-      selectParts.push(...this.selectedFields);
+    if (this.#props.selectedFields && this.#props.selectedFields.length > 0) {
+      selectParts.push(...this.#props.selectedFields);
     }
 
     // Add aggregates
-    if (this.aggregates.length > 0) {
-      const aggregateParts = this.aggregates.map(
+    if (this.#props.aggregates.length > 0) {
+      const aggregateParts = this.#props.aggregates.map(
         (agg) => `${agg.func}(${agg.column}) as ${agg.alias}`
       );
       selectParts.push(...aggregateParts);
@@ -567,29 +655,29 @@ export class QueryBuilder<TRow, TSelected extends keyof TRow | undefined = undef
 
     // If no fields or aggregates specified, use *
     const fields = selectParts.length > 0 ? selectParts.join(", ") : "*";
-    let sql = `SELECT ${fields} FROM ${this.tableName}`;
+    let sql = `SELECT ${fields} FROM ${this.#props.tableName}`;
 
-    if (this.whereClauses.length > 0) {
+    if (this.#props.whereClauses.length > 0) {
       sql += ` WHERE ${this.buildWhereClause()}`;
     }
 
-    if (this.groupByFields.length > 0) {
-      sql += ` GROUP BY ${this.groupByFields.join(", ")}`;
+    if (this.#props.groupByFields.length > 0) {
+      sql += ` GROUP BY ${this.#props.groupByFields.join(", ")}`;
     }
 
-    if (this.orderByClause) {
-      sql += ` ORDER BY ${this.orderByClause}`;
+    if (this.#props.orderByClause) {
+      sql += ` ORDER BY ${this.#props.orderByClause}`;
     }
 
-    if (this.limitCount !== undefined) {
-      sql += ` LIMIT ${this.limitCount}`;
+    if (this.#props.limitCount !== undefined) {
+      sql += ` LIMIT ${this.#props.limitCount}`;
     }
 
-    if (this.offsetCount !== undefined) {
-      sql += ` OFFSET ${this.offsetCount}`;
+    if (this.#props.offsetCount !== undefined) {
+      sql += ` OFFSET ${this.#props.offsetCount}`;
     }
 
-    return { params: this.whereParams, sql };
+    return { params: [...this.#props.whereParams], sql };
   }
 
   /**
@@ -619,7 +707,7 @@ export class QueryBuilder<TRow, TSelected extends keyof TRow | undefined = undef
    */
   async all(): Promise<QueryResult<TRow, TSelected>[]> {
     const { sql, params } = this.buildSQL();
-    return this.executeQuery<QueryResult<TRow, TSelected>>(sql, params);
+    return this.#props.executeQuery<QueryResult<TRow, TSelected>>(sql, params);
   }
 
   /**
@@ -650,13 +738,15 @@ export class QueryBuilder<TRow, TSelected extends keyof TRow | undefined = undef
    * ```
    */
   async first(): Promise<QueryResult<TRow, TSelected> | null> {
-    const originalLimit = this.limitCount;
-    this.limitCount = 1;
+    // Create a temporary instance with limit(1) to avoid mutating this instance
+    const limitedQuery = new QueryBuilder({
+      ...this.#props,
+      limitCount: 1,
+    });
 
-    const { sql, params } = this.buildSQL();
-    const results = await this.executeQuery<QueryResult<TRow, TSelected>>(sql, params);
+    const { sql, params } = limitedQuery.buildSQL();
+    const results = await this.#props.executeQuery<QueryResult<TRow, TSelected>>(sql, params);
 
-    this.limitCount = originalLimit;
     return results[0] || null;
   }
 
@@ -685,13 +775,13 @@ export class QueryBuilder<TRow, TSelected extends keyof TRow | undefined = undef
    * ```
    */
   async count(): Promise<number> {
-    let sql = `SELECT COUNT(*) as count FROM ${this.tableName}`;
+    let sql = `SELECT COUNT(*) as count FROM ${this.#props.tableName}`;
 
-    if (this.whereClauses.length > 0) {
+    if (this.#props.whereClauses.length > 0) {
       sql += ` WHERE ${this.buildWhereClause()}`;
     }
 
-    const results = await this.executeQuery(sql, this.whereParams) as Array<{ count: number }>;
+    const results = await this.#props.executeQuery(sql, [...this.#props.whereParams]) as Array<{ count: number }>;
     return results[0]?.count || 0;
   }
 }

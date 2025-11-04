@@ -562,7 +562,7 @@ export async function createSQLiteClient<TSchema extends SchemaRegistry>(
     // Query builder
     query<TTable extends TableName<TSchema>>(table: TTable) {
       const schema = opts.schema[table] as z.ZodObject<z.ZodRawShape>;
-      return new QueryBuilder(executeQuery, String(table), schema);
+      return QueryBuilder.create<TableRow<TSchema, TTable>>(executeQuery, String(table), schema);
     },
 
     // Insert builder
