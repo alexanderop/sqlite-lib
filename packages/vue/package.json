@@ -58,6 +58,7 @@
     "test:watch": "vitest",
     "lint": "oxlint .",
     "lint:type-aware": "oxlint --type-aware .",
-    "lint:fix": "oxlint --fix ."
+    "lint:fix": "oxlint --fix .",
+    "typecheck": "tsc --noEmit"
   }
 }

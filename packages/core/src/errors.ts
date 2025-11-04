@@ -31,7 +31,9 @@ export class SQLiteError extends Error {
     super(message);
     this.name = "SQLiteError";
     this.code = code;
-    this.sql = sql;
+    if (sql !== undefined) {
+      this.sql = sql;
+    }
     // Maintains proper stack trace for where our error was thrown (only available on V8)
     (Error as ErrorConstructor).captureStackTrace?.(this, SQLiteError);
   }

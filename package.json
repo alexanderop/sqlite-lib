@@ -18,7 +18,10 @@
     "test:vue-app": "pnpm --filter vue-app test",
     "lint": "oxlint .",
     "lint:type-aware": "oxlint --type-aware .",
-    "lint:fix": "oxlint --fix ."
+    "lint:fix": "oxlint --fix .",
+    "typecheck": "tsc --build",
+    "typecheck:watch": "tsc --build --watch",
+    "typecheck:clean": "tsc --build --clean"
   },
   "packageManager": "pnpm@10.18.3",
   "devDependencies": {

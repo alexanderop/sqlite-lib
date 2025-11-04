@@ -48,7 +48,8 @@
     "test:watch": "vitest",
     "lint": "oxlint .",
     "lint:type-aware": "oxlint --type-aware .",
-    "lint:fix": "oxlint --fix ."
+    "lint:fix": "oxlint --fix .",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@sqlite.org/sqlite-wasm": "^3.50.4-build1"
